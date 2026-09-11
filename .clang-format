@@ -1,0 +1,169 @@
+BasedOnStyle: LLVM
+
+# ─────────────────────────────────────────────
+# Indentation
+# ─────────────────────────────────────────────
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
+
+IndentCaseLabels: false
+IndentGotoLabels: true
+IndentPPDirectives: None
+NamespaceIndentation: None
+AccessModifierOffset: -4
+
+
+# ─────────────────────────────────────────────
+# Braces
+# ─────────────────────────────────────────────
+
+BreakBeforeBraces: Allman
+
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Empty
+
+BraceWrapping:
+    AfterCaseLabel: false
+    AfterClass: true
+    AfterControlStatement: Always
+    AfterEnum: true
+    AfterFunction: true
+    AfterNamespace: true
+    AfterStruct: true
+    AfterUnion: true
+    BeforeCatch: true
+    BeforeElse: true
+    BeforeWhile: true
+    SplitEmptyFunction: false
+    SplitEmptyRecord: true
+    SplitEmptyNamespace: false
+
+
+# ─────────────────────────────────────────────
+# Line length / wrapping
+# ─────────────────────────────────────────────
+
+ColumnLimit: 80
+
+BinPackArguments: false
+BinPackParameters: false
+
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+
+BreakBeforeBinaryOperators: None
+BreakBeforeTernaryOperators: true
+
+
+# ─────────────────────────────────────────────
+# Pointers / references
+# ─────────────────────────────────────────────
+
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+
+# ─────────────────────────────────────────────
+# Alignment
+# ─────────────────────────────────────────────
+
+AlignConsecutiveDeclarations:
+    Enabled: true
+    AcrossEmptyLines: false
+    AcrossComments: false
+
+AlignConsecutiveAssignments:
+    Enabled: true
+    AcrossEmptyLines: false
+    AcrossComments: false
+
+AlignConsecutiveMacros:
+    Enabled: true
+    AcrossEmptyLines: false
+    AcrossComments: false
+
+AlignOperands: Align
+AlignTrailingComments: true
+
+
+# ─────────────────────────────────────────────
+# Spaces
+# ─────────────────────────────────────────────
+
+SpaceBeforeParens: ControlStatements
+
+SpaceBeforeAssignmentOperators: true
+
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpacesInAngles: false
+
+SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: true
+
+SpaceBeforeCpp11BracedList: false
+Cpp11BracedListStyle: true
+
+
+# ─────────────────────────────────────────────
+# Functions
+# ─────────────────────────────────────────────
+
+AlwaysBreakAfterReturnType: None
+AlwaysBreakAfterDefinitionReturnType: None
+
+PenaltyReturnTypeOnItsOwnLine: 1000
+
+
+# ─────────────────────────────────────────────
+# Classes / structs
+# ─────────────────────────────────────────────
+
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+
+ConstructorInitializerAllOnOneLineOrOnePerLine: false
+
+
+# ─────────────────────────────────────────────
+# Includes
+# ─────────────────────────────────────────────
+
+SortIncludes: CaseSensitive
+IncludeBlocks: Regroup
+
+
+# ─────────────────────────────────────────────
+# Comments
+# ─────────────────────────────────────────────
+
+ReflowComments: true
+PenaltyBreakComment: 300
+
+SpacesBeforeTrailingComments: 2
+
+
+# ─────────────────────────────────────────────
+# C++ standard
+# ─────────────────────────────────────────────
+
+Standard: c++20
+
+
+# ─────────────────────────────────────────────
+# Miscellaneous
+# ─────────────────────────────────────────────
+
+DerivePointerAlignment: false
+SortUsingDeclarations: Lexicographic
+
+EmptyLineBeforeAccessModifier: LogicalBlock
+MaxEmptyLinesToKeep: 1
+
+KeepEmptyLinesAtTheStartOfBlocks: false
+KeepEmptyLinesAtEOF: false
