@@ -7,6 +7,14 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+/*
+ * Writes `len` bytes to `fd`, looping over send() until it's all sent.
+ * Gives up silently on error (including EPIPE, which we can now get
+ * without crashing the process since SIGPIPE is ignored - see
+ * signals.c) - a reply that can't be delivered is dropped, not retried
+ * or surfaced to the caller, since there's nothing more this layer can
+ * do about a broken connection.
+ */
 static void send_all(int fd, const char* buf, size_t len)
 {
     size_t sent = 0;
@@ -26,6 +34,13 @@ void reply_simple(int fd, const char* str)
     char buf[256];
     int  n = snprintf(buf, sizeof(buf), "+%s\r\n", str);
 
+    /*
+     * assert() is the right tool here, not a runtime check: `str` only ever
+     * comes from fixed literals we control (see database.c), never from
+     * client input, so if this holds under a debug build it holds
+     * unconditionally - there's no way for it to start failing only in a
+     * release (NDEBUG) build.
+     */
     assert(n >= 0 && (size_t)n < sizeof(buf));
 
     send_all(fd, buf, (size_t)n);
@@ -57,6 +72,7 @@ void reply_bulk(int fd, const char* str, size_t len)
 {
     if (!str)
     {
+        /* "$-1\r\n" is the RESP nil bulk string, used for a GET miss. */
         send_all(fd, "$-1\r\n", 5);
         return;
     }

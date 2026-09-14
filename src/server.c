@@ -13,8 +13,21 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+/*
+ * Size of each connection's line-assembly buffer. The protocol is
+ * line-based (one command per '\n'-terminated line), so this also caps
+ * the maximum command line length; see the overflow check at the bottom
+ * of handle_client().
+ */
 #define BUFFER_SIZE 4096
 
+/*
+ * Parses one line into a command and executes it, writing the reply
+ * straight to `client_fd`. `line` is a single '\n'-terminated (or
+ * buffer-exhausted) chunk carved out of the connection's read buffer by
+ * handle_client() - parse_command() is destructive and will tokenize it
+ * in place.
+ */
 static void dispatch(int client_fd, char* line, ssize_t len)
 {
     command_t cmd;
@@ -22,7 +35,9 @@ static void dispatch(int client_fd, char* line, ssize_t len)
 
     if (argc < 0)
     {
-        LOG_ERROR("Too many arguments");
+        /* Client-driven, not a server fault - see execute_command() for
+         * the same reasoning applied to command-level errors. */
+        LOG_DEBUG("Rejected command: too many arguments (max %d)", MAX_ARGS);
         reply_error(client_fd, "ERR too many arguments");
     }
     else if (argc == 0)
@@ -58,7 +73,17 @@ static void dispatch(int client_fd, char* line, ssize_t len)
     }
 }
 
-static void handle_client(int client_fd)
+/*
+ * Services one client connection until it disconnects, the server is
+ * asked to shut down, or a read error occurs. `peer` is a pre-formatted
+ * "ip:port" string used only for log messages.
+ *
+ * Reads are accumulated into `buffer`; each complete '\n'-terminated
+ * line found in it is handed to dispatch() one at a time, and any
+ * trailing partial line is shifted to the front of the buffer to be
+ * completed by a subsequent read.
+ */
+static void handle_client(int client_fd, const char* peer)
 {
     char   buffer[BUFFER_SIZE];
     size_t buf_len = 0;
@@ -75,13 +100,13 @@ static void handle_client(int client_fd)
                 continue;
             }
 
-            LOG_PERROR("Failed to read from client");
+            LOG_PERROR("Failed to read from client %s", peer);
             return;
         }
 
         if (n == 0)
         {
-            LOG_INFO("Client disconnected");
+            LOG_INFO("Client %s disconnected", peer);
             return;
         }
 
@@ -106,19 +131,38 @@ static void handle_client(int client_fd)
             line_start = newline + 1;
         }
 
+        /* Shift any incomplete trailing line to the front of the buffer
+         * so the next recv() can complete it. */
         size_t leftover = (buffer + buf_len) - line_start;
         memmove(buffer, line_start, leftover);
         buf_len = leftover;
 
+        /* The buffer filled up without ever finding a '\n' - the client
+         * is sending a line longer than we support. This is unusual
+         * enough (a well-behaved client should never hit it) that it's
+         * worth an ERROR rather than DEBUG, so operators notice a
+         * misbehaving or hostile client. We drop what we have and keep
+         * the connection open rather than disconnecting the client. */
         if (buf_len == sizeof(buffer) - 1)
         {
-            LOG_ERROR("Command line too long");
+            LOG_ERROR("Client %s sent a command line longer than %d bytes",
+                      peer,
+                      BUFFER_SIZE);
             reply_error(client_fd, "ERR command line too long");
             buf_len = 0;
         }
     }
 }
 
+/*
+ * Creates, configures, binds, and starts listening on the server's
+ * socket. `service` is the socket type (e.g. SOCK_STREAM), matching the
+ * middle argument of socket(2) - named after the struct field it fills,
+ * not to be confused with `protocol`.
+ *
+ * Returns SERVER_OK on success, or a SERVER_ERR_* code on failure (see
+ * server.h); the specific failure is also logged via LOG_PERROR.
+ */
 int server_init(server_t*     server,
                 int           domain,
                 int           port,
@@ -146,8 +190,19 @@ int server_init(server_t*     server,
         return SERVER_ERR_SOCKET;
     }
 
+    /*
+     * Non-fatal: without SO_REUSEADDR a quick restart can fail to bind
+     * with "Address already in use" while the old socket lingers in
+     * TIME_WAIT, but the server can still run without it, so we just
+     * log and carry on rather than aborting startup over it.
+     */
     int opt = 1;
-    setsockopt(server->socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    if (setsockopt(
+            server->socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) <
+        0)
+    {
+        LOG_PERROR("Failed to set SO_REUSEADDR (continuing anyway)");
+    }
 
     if (bind(server->socket_fd,
              (struct sockaddr*)&server->address,
@@ -168,11 +223,22 @@ int server_init(server_t*     server,
     return SERVER_OK;
 }
 
+/*
+ * Accepts and services one client connection at a time (see the note in
+ * the code review about this being a single-connection-at-a-time
+ * server: a second client cannot connect until the first disconnects).
+ * Runs until shutdown_requested is set by a signal handler (see
+ * signals.c) or an unrecoverable accept() error occurs.
+ */
 int server_start(server_t* server)
 {
     while (!shutdown_requested)
     {
-        int client_fd = accept(server->socket_fd, NULL, NULL);
+        struct sockaddr_in client_addr;
+        socklen_t          addr_len   = sizeof(client_addr);
+        int                client_fd  = accept(server->socket_fd,
+                                (struct sockaddr*)&client_addr,
+                                &addr_len);
 
         if (client_fd < 0)
         {
@@ -183,6 +249,11 @@ int server_start(server_t* server)
 
             LOG_PERROR("Failed to accept connection");
 
+            /* These errno values mean the listening socket itself is
+             * broken beyond repair (bad/invalid fd) - there's no point
+             * retrying accept(), so bail out of the server. Anything
+             * else (e.g. a per-connection issue like ECONNABORTED) is
+             * transient and worth just retrying. */
             if (errno == EBADF || errno == EINVAL || errno == ENOTSOCK)
             {
                 close(server->socket_fd);
@@ -192,14 +263,21 @@ int server_start(server_t* server)
             continue;
         }
 
-        LOG_INFO("Client connected");
+        char peer[INET_ADDRSTRLEN + 8];
+        snprintf(peer,
+                 sizeof(peer),
+                 "%s:%d",
+                 inet_ntoa(client_addr.sin_addr),
+                 ntohs(client_addr.sin_port));
 
-        handle_client(client_fd);
+        LOG_INFO("Client %s connected", peer);
+
+        handle_client(client_fd, peer);
 
         close(client_fd);
     }
 
-    LOG_INFO("Shutting down...");
+    LOG_INFO("Shutting down (signal %d)...", (int)last_signal);
     close(server->socket_fd);
 
     return 0;

@@ -10,6 +10,11 @@
 #define MIN_PORT     1
 #define MAX_PORT     65535
 
+/*
+ * Parses `str` as a TCP port number into `*out_port`. Returns 0 on
+ * success, -1 (with an error already printed to stderr) if `str` isn't
+ * a valid base-10 integer or falls outside [MIN_PORT, MAX_PORT].
+ */
 static int parse_port(const char* str, int* out_port)
 {
     char* endptr;
@@ -34,6 +39,10 @@ static int parse_port(const char* str, int* out_port)
     return 0;
 }
 
+/*
+ * Entry point: vaultix [port]
+ * Listens on `port` (default DEFAULT_PORT) until SIGINT/SIGTERM.
+ */
 int main(int argc, char* argv[])
 {
     int port = DEFAULT_PORT;
@@ -53,6 +62,8 @@ int main(int argc, char* argv[])
     }
 
     install_signal_handlers();
+
+    LOG_INFO("Starting vaultix on port %d", port);
 
     server_t server;
     if (server_init(&server, AF_INET, port, SOCK_STREAM, 0, 10, INADDR_ANY) < 0)
