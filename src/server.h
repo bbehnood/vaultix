@@ -42,6 +42,8 @@
     } while (0)
 #endif
 
+struct client;
+
 typedef struct server
 {
     int           domain;
@@ -52,7 +54,9 @@ typedef struct server
     unsigned long interface;
 
     int                socket_fd;
+    int                epoll_fd;
     struct sockaddr_in address;
+    struct client*     clients;
 } server_t;
 
 typedef enum server_status
@@ -62,6 +66,7 @@ typedef enum server_status
     SERVER_ERR_BIND,
     SERVER_ERR_LISTEN,
     SERVER_ERR_ACCEPT,
+    SERVER_ERR_EPOLL,
 } server_status_t;
 
 server_status_t server_init(server_t*     server,
