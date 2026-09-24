@@ -22,6 +22,8 @@ endif
 
 src = files(
   'src/main.c',
+  'src/server.c',
+  'src/signals.c',
 )
 
 inc = include_directories('src')
